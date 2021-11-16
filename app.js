@@ -1,22 +1,36 @@
 'use strict';
 const express = require('express');
-var cors = require('cors');
 const bodyParser = require('body-parser');
 const app = express();
+const passport = require('./utils/pass');
 const port = 3000;
 const username = 'foo';
 const password = 'bar';
 
+const loggedIn = (req, res, next) => {
+	if(req.user) {
+		next();
+	} else {
+		res.redirect('/form');
+	}
+};
+
+
+var cors = require('cors');
 var cookieParser = require('cookie-parser');
 app.use(cookieParser());
 
 var session = require('express-session');
-app.use(session({secret: 'foobar'}));
+app.use(session({secret: 'foobar', cookie: {maxAge: 60000}}));
 var sessionData;
 
 app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+//Session has to be active before we use the passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.set('views', './views');
 app.set('view engine', 'pug');
@@ -41,23 +55,19 @@ app.get('/form', (req,res) => {
 	res.render('form');
 });
 
-app.get('/secret', (req, res) => {
+app.get('/secret',loggedIn, (req, res) => {
 	res.render('secret');
 });
 
-app.post('/login', (req, res, next) => {
-	console.log(req.body);
-	sessionData = req.session;
-	sessionData.username = req.body.username;
-	sessionData.password = req.body.password;
-	if (sessionData.username === username && sessionData.password === password) {
-		sessionData.logged = true;
+app.post('/login', 
+	passport.authenticate('local', {failureRedirect: './form'}),
+	(req, res) => {
+		console.log('success');
 		res.redirect('./secret');
-	} else {
-		console.log('wrong login');
-		sessionData.logged = false;
-		res.redirect('./form');
-	};
+});
+app.get('/logout', function(req, res){
+  req.logout();
+  res.redirect('/');
 });
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
